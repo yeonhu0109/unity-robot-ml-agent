@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -186,5 +185,34 @@ public class RobotArmController : MonoBehaviour
    }
    public Vector3 ToLocal(Vector3 worldPosition) =>
        transform.InverseTransformPoint(worldPosition);
+  
+   public Vector2 spawnDistanceRange = new Vector2(1.2f, 2.4f);
+   public Vector2 spawnYawRange = new Vector2(0f, 0f);
+   public float spawnHeight = 0.1f;
+  
+   // 거리와 좌우 각도로 테이블 위의 한 점을 구한다. (받침대 기준 로컬 좌표)
+   public Vector3 SpawnPointLocal(float distance, float yawDegrees)
+   {
+       float yaw = yawDegrees * Mathf.Deg2Rad;
+       return new Vector3(
+           Mathf.Sin(yaw) * distance,
+           spawnHeight,
+           Mathf.Cos(yaw) * distance);
+   }
+
+
+   public float NormalizedAngle(int i)
+   {
+       return joints[i].Angle / 180f;
+   }
+   public float NormalizedVelocity(int i)
+   {
+       return joints[i].Velocity / joints[i].maxSpeed;
+   }
+   public float reach = 2.7f;
+   public Vector3 ToNormalizedLocal(Vector3 worldPosition)
+   {
+       return ToLocal(worldPosition) / reach;
+   }
   
 }
