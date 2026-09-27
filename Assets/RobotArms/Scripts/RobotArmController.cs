@@ -1,13 +1,7 @@
 
-
+using System;
 using System.Collections.Generic;
 using UnityEngine;
-
-
-
-
-
-
 
 
 
@@ -85,7 +79,17 @@ public class RobotArmController : MonoBehaviour
 
    public void Drive(int index, float normalizedSpeed, float deltaTime)
    {
+       float beforeAngle = joints[index].Angle;
        joints[index].Drive(normalizedSpeed, deltaTime);
+
+
+       if (IsBlocked())
+       {
+           Debug.Log("BLCOKED");
+           // 이번 움직임 때문에 뚫렸다 → 되돌린다.
+           // ResetTo는 각속도도 0으로 만든다. 벽에 닿아 멈춘 것처럼 보인다.
+           joints[index].ResetTo(beforeAngle);
+       }
    }
   
 
@@ -100,26 +104,87 @@ public class RobotArmController : MonoBehaviour
            Drive(i, RobotArmInput.Joint(i), Time.fixedDeltaTime);
        }
    }
+  
+   // 물체를 집는 지점
+   public Transform tip;
 
+
+
+
+   // 바닥(테이블 윗면) 높이. 받침대 기준 y 좌표.
    public float floorHeight = 0f;
 
-   
+
+   // 관절들에 대한 transform 정보 ( 위치 크기 각동 가져올 수 있는 정보 )
    Transform[] _chain;
    Transform[] Chain
    {
        get
        {
            if (_chain != null && _chain.Length > 0) return _chain;
+
+
            var list = new List<Transform>();
-           for (var t = joints[0]; t != null && t != transform; t = t.parent)
+           for (var t = tip; t != null && t != transform; t = t.parent)
                list.Add(t);
            list.Reverse();
            return _chain = list.ToArray();
        }
    }
-   
-   
+  
+   // 바닥에서 이만큼 띄운다. 링크의 굵기와 팔 끝 구의 반지름을 감안한 여유.
+   public float clearance = 0.07f;
+   // 팔 끝에서 이 거리 안쪽은 물체 검사에서 제외
+   public float tipExemptDistance = 0.28f;
+   // 물체를 감싸는 구의 반지름.
+   public float obstacleRadius = 0.16f;
+   // 뚫고 지나가면 안 되는 물체들.
+   public Transform[] obstacles = new Transform[0];
+  
+   // 팔 끝에 대한 world 표좌표
+   public Vector3 TipPosition =>
+       tip != null ? tip.position : transform.position;
+
+
+   // 지금 자세가 바닥을 뚫거나 물체를 관통하고 있는가
    public bool IsBlocked()
    {
+       var chain = Chain;
+       float minY = floorHeight + clearance;
+       Vector3 tipPos = TipPosition;
+      
+       // 링크 하나를 몇 점으로 쪼개서 검사할지
+       int samplesPerLink = 6;
+      
+       for (int seg = 0; seg < chain.Length - 1; seg++)
+       {
+           Vector3 a = chain[seg].position;
+           Vector3 b = chain[seg + 1].position;
+
+
+           for (int s = 0; s <= samplesPerLink; s++)
+           {
+               Vector3 p = Vector3.Lerp(a, b, s / (float)samplesPerLink);
+              
+               // 바닥 검사
+               if (ToLocal(p).y < minY) return true;
+              
+               // 물체 검사 — 팔 끝 근처는 제외한다.
+               // 그렇지 않으면 물체를 집으러 다가가는 것 자체가 막힌다.
+               if (Vector3.Distance(p, tipPos) <= tipExemptDistance) continue;
+
+
+               foreach (var o in obstacles)
+               {
+                   if (o == null) continue;
+                   if (Vector3.Distance(p, o.position) < obstacleRadius) return true;
+               }
+           }
+       }
+      
+       return false;
    }
+   public Vector3 ToLocal(Vector3 worldPosition) =>
+       transform.InverseTransformPoint(worldPosition);
+  
 }
